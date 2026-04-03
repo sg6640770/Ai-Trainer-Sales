@@ -92,7 +92,9 @@ async def websocket_endpoint(ws: WebSocket):
 
             # Binary = audio chunk from mic
             if "bytes" in msg and msg["bytes"]:
-                await session.send_audio(msg["bytes"])
+                chunk = msg["bytes"]
+                # print(f"Audio chunk: {len(chunk)} bytes")  # debug
+                await session.send_audio(chunk)
 
             # Text = control commands
             elif "text" in msg and msg["text"]:
@@ -105,6 +107,7 @@ async def websocket_endpoint(ws: WebSocket):
 
                     elif cmd == "end_session":
                         await safe_send(ws, {"type": "status", "message": "Ending session..."})
+                        await ws.close(code=1000, reason="Session ended by user")
                         break
 
                     elif cmd == "ping":

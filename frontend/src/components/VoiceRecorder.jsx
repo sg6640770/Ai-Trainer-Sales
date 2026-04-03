@@ -22,17 +22,18 @@ export default function VoiceRecorder({
   const [micError,  setMicError]  = useState("");
   const [volume,    setVolume]    = useState(0);
 
-  const streamRef    = useRef(null);
-  const audioCtxRef  = useRef(null);
-  const processorRef = useRef(null);
-  const sourceRef    = useRef(null);
-  const analyserRef  = useRef(null);
-  const animFrameRef = useRef(null);
-  const intervalRef  = useRef(null);
-  const pcmBufferRef = useRef([]);
-  const micMutedRef  = useRef(false);
-  const onAudioRef   = useRef(onAudioReady);
-  onAudioRef.current = onAudioReady;
+  const streamRef      = useRef(null);
+  const audioCtxRef    = useRef(null);
+  const processorRef   = useRef(null);
+  const sourceRef      = useRef(null);
+  const analyserRef    = useRef(null);
+  const silentDestRef  = useRef(null);   // keeps MediaStreamDestination alive (GC guard)
+  const animFrameRef   = useRef(null);
+  const intervalRef    = useRef(null);
+  const pcmBufferRef   = useRef([]);
+  const micMutedRef    = useRef(false);
+  const onAudioRef     = useRef(onAudioReady);
+  onAudioRef.current   = onAudioReady;
 
   // ── Float32 → PCM16 ──────────────────────────────────────────────────────
   function toPCM16(f32) {
@@ -79,21 +80,37 @@ export default function VoiceRecorder({
   useEffect(() => {
     let active = true;
 
-    navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: 16000,
-      },
-      video: false,
-    }).then(stream => {
+    async function startMic() {
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 16000,
+          },
+          video: false,
+        });
+      } catch (err) {
+        if (!active) return;
+        console.error("Mic error:", err);
+        setMicError("Mic access denied");
+        return;
+      }
+
       if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = stream;
 
       // AudioContext at 16 kHz — browser resamples natively, no manual downsampling
       const ctx = new AudioContext({ sampleRate: 16000 });
       audioCtxRef.current = ctx;
+
+      // Chrome suspends AudioContext created outside a direct user-gesture handler.
+      // We must resume() so onaudioprocess actually fires and audio is captured.
+      if (ctx.state !== "running") {
+        await ctx.resume();
+      }
 
       const source = ctx.createMediaStreamSource(stream);
       sourceRef.current = source;
@@ -111,18 +128,19 @@ export default function VoiceRecorder({
       // ★ Connect to a SILENT destination — NOT ctx.destination
       //   Connecting to ctx.destination plays mic back through speakers
       //   and creates a feedback loop that wrecks ElevenLabs STT.
-      processor.connect(ctx.createMediaStreamDestination());
+      //   Store the destination in a ref to prevent garbage collection,
+      //   which would stop onaudioprocess from firing.
+      const silentDest = ctx.createMediaStreamDestination();
+      silentDestRef.current = silentDest;
+      processor.connect(silentDest);
       processorRef.current = processor;
 
       intervalRef.current = setInterval(flush, 250);
       startVolumeMeter();
       setMicActive(true);
+    }
 
-    }).catch(err => {
-      if (!active) return;
-      console.error("Mic error:", err);
-      setMicError("Mic access denied");
-    });
+    startMic();
 
     return () => {
       active = false;
@@ -132,6 +150,7 @@ export default function VoiceRecorder({
       sourceRef.current?.disconnect();
       audioCtxRef.current?.close();
       streamRef.current?.getTracks().forEach(t => t.stop());
+      silentDestRef.current = null;
     };
   }, []);
 
