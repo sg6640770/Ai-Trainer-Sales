@@ -1,0 +1,116 @@
+Starting backend...
+Starting frontend...
+[32mINFO[0m:     Will watch for changes in these directories: ['/home/runner/workspace/backend']
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+[32mINFO[0m:     Started reloader process [[36m[1m2168[0m] using [36m[1mStatReload[0m
+[1G[0K⠙[1G[0K⠹[1G[0K⠸[32mINFO[0m:     Started server process [[36m2185[0m]
+[32mINFO[0m:     Waiting for application startup.
+[32mINFO[0m:     Application startup complete.
+[1G[0K⠼[1G[0K⠴[1G[0K⠦[1G[0K⠧[1G[0K
+up to date, audited 118 packages in 838ms
+[1G[0K⠧[1G[0K
+[1G[0K⠧[1G[0K9 packages are looking for funding
+[1G[0K⠧[1G[0K  run `npm fund` for details
+[1G[0K⠧[1G[0K
+2 [33m[1mmoderate[22m[39m severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[1G[0K⠧[1G[0KBoth servers running
+Backend: http://0.0.0.0:8000
+Frontend: http://0.0.0.0:5173
+
+> ai-sales-trainer@0.1.0 dev
+> vite --host 0.0.0.0 --port 5000
+
+[1G[0K
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m153[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5000[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://172.31.113.130:[1m5000[22m/[39m
+[32mINFO[0m:     127.0.0.1:49716 - "[1mGET /api/simli-config HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     127.0.0.1:49720 - "[1mGET /health HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     ('10.84.10.35', 0) - "WebSocket /ws/session" [accepted]
+[32mINFO[0m:     connection open
+New session → persona=parent, language=hinglish
+API KEY: sk_d0a3e34...
+AGENT ID: agent_7201kn7emfjyet68badj31hkj3kw
+Signed URL response status: 200
+ElevenLabs agent connected
+Session initiated: {'conversation_initiation_metadata_event': {'conversation_id': 'conv_7201kn94f012egf8x38fsxv7p3rn', 'agent_output_audio_format': 'pcm_16000', 'user_input_audio_format': 'pcm_16000'}, 'type': 'conversation_initiation_metadata'}
+[32mINFO[0m:     10.84.10.35:0 - "[1mGET /api/simli-config HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.84.5.5:0 - "[1mGET /api/simli-config HTTP/1.1[0m" [32m200 OK[0m
+Session cleaned up
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m7:46:51 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/VoiceRecorder.jsx[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m7:47:02 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.jsx[22m

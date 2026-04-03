@@ -1,0 +1,16 @@
+Starting backend...
+start.sh: line 4: pip: command not found
+Starting frontend...
+start.sh: line 5: uvicorn: command not found
+start.sh: line 10: npm: command not found
+Both servers running
+Backend: http://0.0.0.0:8000
+Frontend: http://0.0.0.0:5173
+start.sh: line 11: npm: command not found
+start.sh: line 28: ---: command not found
+start.sh: line 32: index.html: command not found
+start.sh: line 26: index.html: command not found
+start.sh: line 26: backend/requirements.txt: No such file or directory
+start.sh: line 31: python-dotenv==1.0.1: command not found
+start.sh: line 33: python-multipart==0.0.12: command not found
+start.sh: line 34: python-jose==3.3.0: command not found

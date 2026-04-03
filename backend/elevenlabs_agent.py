@@ -13,16 +13,16 @@ class ElevenLabsAgentSession:
         self.on_status = on_status
         self.ws = None
         self._closed = False
+        self._receive_task = None
 
     async def connect(self):
         api_key = os.getenv("ELEVENLABS_API_KEY")
         agent_id = os.getenv("ELEVENLABS_AGENT_ID")
 
-        print("API KEY:", api_key[:10] + "..." if api_key else "MISSING")
-        print("AGENT ID:", agent_id)
-
         if not api_key or not agent_id:
-            raise Exception("Missing ElevenLabs ENV variables")
+            raise Exception("Missing ELEVENLABS_API_KEY or ELEVENLABS_AGENT_ID in .env")
+
+        print(f"Getting signed URL for agent: {agent_id}")
 
         async with httpx.AsyncClient(timeout=15) as client:
             res = await client.get(
@@ -30,26 +30,32 @@ class ElevenLabsAgentSession:
                 headers={"xi-api-key": api_key}
             )
             data = res.json()
-            print("Signed URL response status:", res.status_code)
-
             if "signed_url" not in data:
-                raise Exception(f"Invalid ElevenLabs response: {data}")
-
+                raise Exception(f"ElevenLabs error: {data}")
             signed_url = data["signed_url"]
 
+        print("Connecting to ElevenLabs WebSocket...")
         self.ws = await websockets.connect(
             signed_url,
             extra_headers={"xi-api-key": api_key},
             ping_interval=20,
             ping_timeout=10
         )
+        print("WebSocket connected")
 
-        # ✅ Bare init — no overrides (agent config locks them)
+        # Send minimal init — no overrides, no first message
+        # User speaks first — agent waits
         await self.ws.send(json.dumps({
-            "type": "conversation_initiation_client_data"
+            "type": "conversation_initiation_client_data",
+            "conversation_config_override": {
+                "agent": {
+                    "first_message": ""
+                }
+            }
         }))
 
-        asyncio.create_task(self._receive_loop())
+        self._receive_task = asyncio.create_task(self._receive_loop())
+        print("ElevenLabs session ready — waiting for user to speak first")
 
     async def _receive_loop(self):
         try:
@@ -61,22 +67,20 @@ class ElevenLabsAgentSession:
                     msg_type = data.get("type", "")
 
                     if msg_type == "audio":
-                        audio_event = data.get("audio_event", {})
-                        # ElevenLabs sends PCM 16000Hz base64 — forward as-is
-                        audio_b64 = audio_event.get("audio_base_64", "")
+                        audio_b64 = data.get("audio_event", {}).get("audio_base_64", "")
                         if audio_b64:
                             self.on_agent_audio(audio_b64)
 
                     elif msg_type == "agent_response":
-                        event = data.get("agent_response_event", {})
-                        text = event.get("agent_response", "")
+                        text = data.get("agent_response_event", {}).get("agent_response", "")
                         if text:
+                            print(f"Agent: {text[:80]}")
                             self.on_transcript("assistant", text)
 
                     elif msg_type == "user_transcript":
-                        event = data.get("user_transcription_event", {})
-                        text = event.get("user_transcript", "")
+                        text = data.get("user_transcription_event", {}).get("user_transcript", "")
                         if text:
+                            print(f"User: {text[:80]}")
                             self.on_transcript("user", text)
 
                     elif msg_type == "interruption":
@@ -89,28 +93,44 @@ class ElevenLabsAgentSession:
                         }))
 
                     elif msg_type == "conversation_initiation_metadata":
-                        print("Session initiated:", data)
+                        meta = data.get("conversation_initiation_metadata_event", {})
+                        print(f"Session metadata: {meta}")
+                        # Confirm expected audio format
+                        print(f"Agent output format: {meta.get('agent_output_audio_format')}")
+                        print(f"User input format: {meta.get('user_input_audio_format')}")
+
+                    elif msg_type == "agent_response_correction":
+                        pass  # ignore corrections silently
+
+                    else:
+                        print(f"Unknown message type: {msg_type}")
 
                 except json.JSONDecodeError:
                     pass
 
         except websockets.exceptions.ConnectionClosed as e:
             print(f"ElevenLabs WS closed: {e}")
+            if not self._closed:
+                self.on_status("disconnected")
         except Exception as e:
             print(f"Receive loop error: {e}")
 
     async def send_audio(self, audio_bytes: bytes):
         """
-        ElevenLabs expects raw PCM 16000Hz mono 16-bit audio, base64-encoded.
-        The frontend must send PCM — not webm/opus.
+        Send PCM 16000Hz mono 16-bit audio to ElevenLabs.
+        Frontend sends this format directly via AudioWorklet.
         """
         if not self.ws or self._closed:
             return
         try:
+            if self.ws.closed:
+                return
             encoded = base64.b64encode(audio_bytes).decode("utf-8")
             await self.ws.send(json.dumps({
                 "user_audio_chunk": encoded
             }))
+        except websockets.exceptions.ConnectionClosed:
+            print("Cannot send audio — connection closed")
         except Exception as e:
             print(f"Send audio error: {e}")
 
@@ -124,8 +144,11 @@ class ElevenLabsAgentSession:
 
     async def close(self):
         self._closed = True
+        if self._receive_task:
+            self._receive_task.cancel()
         if self.ws:
             try:
                 await self.ws.close()
             except Exception:
                 pass
+        print("ElevenLabs session closed")

@@ -1,0 +1,298 @@
+Starting backend...
+Starting frontend...
+[32mINFO[0m:     Will watch for changes in these directories: ['/home/runner/workspace/backend']
+[32mINFO[0m:     Uvicorn running on [1mhttp://0.0.0.0:8000[0m (Press CTRL+C to quit)
+[32mINFO[0m:     Started reloader process [[36m[1m2841[0m] using [36m[1mStatReload[0m
+[1G[0K⠙[1G[0K⠹[1G[0K⠸[32mINFO[0m:     Started server process [[36m2857[0m]
+[32mINFO[0m:     Waiting for application startup.
+[32mINFO[0m:     Application startup complete.
+[1G[0K⠼[1G[0K⠴[1G[0K⠦[1G[0K⠧[1G[0K
+up to date, audited 118 packages in 812ms
+[1G[0K⠧[1G[0K
+[1G[0K⠧[1G[0K9 packages are looking for funding
+[1G[0K⠧[1G[0K  run `npm fund` for details
+[1G[0K⠧[1G[0K
+2 [33m[1mmoderate[22m[39m severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[1G[0K⠧[1G[0KBoth servers running
+Backend: http://0.0.0.0:8000
+Frontend: http://0.0.0.0:5173
+
+> ai-sales-trainer@0.1.0 dev
+> vite --host 0.0.0.0 --port 5000
+
+[1G[0K
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m146[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5000[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://172.31.113.130:[1m5000[22m/[39m
+[32mINFO[0m:     ('10.84.4.43', 0) - "WebSocket /ws/session" [accepted]
+[32mINFO[0m:     connection open
+New session → persona=student, language=english
+API KEY: sk_d0a3e34...
+AGENT ID: agent_7201kn7emfjyet68badj31hkj3kw
+Signed URL response status: 200
+ElevenLabs agent connected
+Session initiated: {'conversation_initiation_metadata_event': {'conversation_id': 'conv_4901kn95f5t3fs1tax09fy5nbfkk', 'agent_output_audio_format': 'pcm_16000', 'user_input_audio_format': 'pcm_16000'}, 'type': 'conversation_initiation_metadata'}
+[32mINFO[0m:     10.84.2.48:0 - "[1mGET /api/simli-config HTTP/1.1[0m" [32m200 OK[0m
+[32mINFO[0m:     10.84.10.35:0 - "[1mGET /api/simli-config HTTP/1.1[0m" [32m200 OK[0m
+Session cleaned up
+[32mINFO[0m:     connection closed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:00:24 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/VoiceRecorder.jsx[22m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:00:24 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: /home/runner/workspace/frontend/src/components/VoiceRecorder.jsx: Unexpected reserved word 'await'. (101:8)
+
+[0m [90m  99 |[31m       [90m// We must resume() so onaudioprocess fires and audio is actually captured.[31m
+ [90m 100 |[31m       [36mif[31m (ctx[33m.[31mstate [33m===[31m [32m"suspended"[31m) {
+[31m[1m>[22m[31m[90m 101 |[31m         [36mawait[31m ctx[33m.[31mresume()[33m;[31m
+ [90m     |[31m         [31m[1m^[22m[31m
+ [90m 102 |[31m       }
+ [90m 103 |[31m
+ [90m 104 |[31m       [36mconst[31m source [33m=[31m ctx[33m.[31mcreateMediaStreamSource(stream)[33m;[31m[0m[39m
+  Plugin: [35mvite:react-babel[39m
+  File: [36m/home/runner/workspace/frontend/src/components/VoiceRecorder.jsx[39m:101:8
+[33m  99 |        // We must resume() so onaudioprocess fires and audio is actually captured.
+  100|        if (ctx.state === "suspended") {
+  101|          await ctx.resume();
+     |          ^
+  102|        }
+  103|  [39m
+      at constructor (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:365:19)
+      at JSXParserMixin.raise (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:6599:19)
+      at JSXParserMixin.checkReservedWord (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12231:12)
+      at JSXParserMixin.parseIdentifierName (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12211:12)
+      at JSXParserMixin.parseIdentifier (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12181:23)
+      at JSXParserMixin.parseExprAtom (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11416:27)
+      at JSXParserMixin.parseExprAtom (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOps (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10784:23)
+      at /home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10780:39
+      at JSXParserMixin.allowInAnd (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12421:16)
+      at JSXParserMixin.parseExpression (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10780:17)
+      at JSXParserMixin.parseStatementContent (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12895:23)
+      at JSXParserMixin.parseStatementLike (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12767:17)
+      at JSXParserMixin.parseStatementListItem (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12747:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:13316:61)
+      at JSXParserMixin.parseBlockBody (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:13309:10)
+      at JSXParserMixin.parseBlock (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:13297:10)
+      at JSXParserMixin.parseStatementContent (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12858:21)
+      at JSXParserMixin.parseStatementLike (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12767:17)
+      at JSXParserMixin.parseStatementOrSloppyAnnexBFunctionDeclaration (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12757:17)
+      at JSXParserMixin.parseIfStatement (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:13130:28)
+      at JSXParserMixin.parseStatementContent (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12796:21)
+      at JSXParserMixin.parseStatementLike (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12767:17)
+      at JSXParserMixin.parseStatementListItem (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12747:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:13316:61)
+      at JSXParserMixin.parseBlockBody (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:13309:10)
+      at JSXParserMixin.parseBlock (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:13297:10)
+      at JSXParserMixin.parseFunctionBody (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12100:24)
+      at JSXParserMixin.parseArrowExpression (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12075:10)
+      at JSXParserMixin.parseExprAtom (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11438:25)
+      at JSXParserMixin.parseExprAtom (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOps (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at /home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10800:39
+      at JSXParserMixin.allowInAnd (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12426:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:10800:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12493:17)
+      at JSXParserMixin.parseExprListItem (/home/runner/workspace/frontend/node_modules/@babel/parser/lib/index.js:12175:18)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:00:45 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/VoiceRecorder.jsx[22m
+[33mWARNING[0m:  StatReload detected changes in 'main.py'. Reloading...
+[32mINFO[0m:     Shutting down
+[32mINFO[0m:     Waiting for application shutdown.
+[32mINFO[0m:     Application shutdown complete.
+[32mINFO[0m:     Finished server process [[36m2857[0m]
+[32mINFO[0m:     Started server process [[36m3308[0m]
+[32mINFO[0m:     Waiting for application startup.
+[32mINFO[0m:     Application startup complete.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:01:23 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/VoiceRecorder.jsx[22m [33m(x2)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:01:33 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/VoiceRecorder.jsx[22m [33m(x3)[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[1;1H[0J[2m8:01:48 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/VoiceRecorder.jsx[22m [33m(x4)[39m
+[33mWARNING[0m:  StatReload detected changes in 'main.py'. Reloading...
+[32mINFO[0m:     Shutting down
+[32mINFO[0m:     Waiting for application shutdown.
+[32mINFO[0m:     Application shutdown complete.
+[32mINFO[0m:     Finished server process [[36m3308[0m]
+[32mINFO[0m:     Started server process [[36m3365[0m]
+[32mINFO[0m:     Waiting for application startup.
+[32mINFO[0m:     Application startup complete.
+[33mWARNING[0m:  StatReload detected changes in 'main.py'. Reloading...
+[32mINFO[0m:     Shutting down
+[32mINFO[0m:     Waiting for application shutdown.
+[32mINFO[0m:     Application shutdown complete.
+[32mINFO[0m:     Finished server process [[36m3365[0m]

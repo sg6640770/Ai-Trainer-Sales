@@ -27,6 +27,8 @@ function playPCM16(b64, audioCtxRef) {
       audioCtxRef.current = new AudioContext({ sampleRate: 16000 });
     }
     const ctx    = audioCtxRef.current;
+    if (ctx.state === "suspended") ctx.resume();
+
     const buffer = ctx.createBuffer(1, float32.length, 16000);
     buffer.copyToChannel(float32, 0);
     const src = ctx.createBufferSource();
@@ -39,15 +41,15 @@ function playPCM16(b64, audioCtxRef) {
 }
 
 export default function App() {
-  const [screen,          setScreen]          = useState("setup");
-  const [persona,         setPersona]         = useState("parent");
-  const [language,        setLanguage]        = useState("hinglish");
-  const [transcript,      setTranscript]      = useState([]);
-  const [status,          setStatus]          = useState("idle");
-  const [feedback,        setFeedback]        = useState(null);
+  const [screen,           setScreen]           = useState("setup");
+  const [persona,          setPersona]          = useState("parent");
+  const [language,         setLanguage]         = useState("hinglish");
+  const [transcript,       setTranscript]       = useState([]);
+  const [status,           setStatus]           = useState("idle");
+  const [feedback,         setFeedback]         = useState(null);
   const [isAvatarSpeaking, setIsAvatarSpeaking] = useState(false);
-  const [cameraOn,        setCameraOn]        = useState(false);
-  const [cameraStream,    setCameraStream]    = useState(null);
+  const [cameraOn,         setCameraOn]         = useState(false);
+  const [cameraStream,     setCameraStream]     = useState(null);
 
   const wsRef         = useRef(null);
   const audioCtxRef   = useRef(null);
@@ -101,7 +103,6 @@ export default function App() {
           break;
         case "error":
           setStatus(`Error: ${msg.message}`);
-          console.error("Server error:", msg.message);
           break;
       }
     };
@@ -121,13 +122,14 @@ export default function App() {
       }
     };
 
-    ws.onerror = () => setStatus("Connection error — is the backend running?");
+    ws.onerror = () => setStatus("Connection error — is backend running?");
   }, [persona, language, handleAgentAudio]);
 
-  const sendAudio = useCallback(async (audioBlob) => {
+  // ── KEY FIX: sendAudio now accepts ArrayBuffer directly ─────────────
+  const sendAudio = useCallback((arrayBuffer) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const buffer = await audioBlob.arrayBuffer();
-    wsRef.current.send(buffer);
+    // Send raw PCM ArrayBuffer directly — no conversion needed
+    wsRef.current.send(arrayBuffer);
   }, []);
 
   const endSession = useCallback(() => {
@@ -138,7 +140,6 @@ export default function App() {
       setScreen("setup");
       setTranscript([]);
       setStatus("idle");
-      setIsAvatarSpeaking(false);
     }
   }, []);
 
@@ -157,8 +158,8 @@ export default function App() {
   }, []);
 
   const handleSimliAudioReady = useCallback((fn) => {
-    simliAudioRef.current  = fn;
-    simliReadyRef.current  = fn !== null;
+    simliAudioRef.current = fn;
+    simliReadyRef.current = fn !== null;
   }, []);
 
   const toggleCamera = useCallback(async () => {
@@ -178,9 +179,7 @@ export default function App() {
   }, [cameraOn, cameraStream]);
 
   useEffect(() => {
-    return () => {
-      cameraStream?.getTracks().forEach(t => t.stop());
-    };
+    return () => { cameraStream?.getTracks().forEach(t => t.stop()); };
   }, [cameraStream]);
 
   return (
@@ -195,7 +194,12 @@ export default function App() {
       )}
 
       {screen === "session" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", height: "100vh" }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 360px",
+          height: "100vh",
+          overflow: "hidden"
+        }}>
           <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
             <AvatarPanel
               isAvatarSpeaking={isAvatarSpeaking}
@@ -224,7 +228,6 @@ export default function App() {
           onReset={resetSession}
         />
       )}
-
     </div>
   );
 }

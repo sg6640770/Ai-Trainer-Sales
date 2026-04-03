@@ -5,8 +5,16 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from elevenlabs_agent import ElevenLabsAgentSession
+import anthropic
 
 load_dotenv()
+
+print("=== ENV CHECK ===")
+print(f"ELEVENLABS_API_KEY: {os.getenv('ELEVENLABS_API_KEY')[:10] if os.getenv('ELEVENLABS_API_KEY') else 'MISSING'}")
+print(f"ELEVENLABS_AGENT_ID: {os.getenv('ELEVENLABS_AGENT_ID') or 'MISSING'}")
+print(f"ANTHROPIC_API_KEY: {'SET' if os.getenv('ANTHROPIC_API_KEY') else 'MISSING'}")
+print(f"SIMLI_API_KEY: {'SET' if os.getenv('SIMLI_API_KEY') else 'MISSING'}")
+print("=================")
 
 app = FastAPI()
 
@@ -43,46 +51,56 @@ async def simli_config():
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     session: ElevenLabsAgentSession | None = None
+    transcript = []
 
     try:
-        # Step 1: Receive config
+        # Step 1 — receive config
         raw_config = await asyncio.wait_for(ws.receive_text(), timeout=10)
         config = json.loads(raw_config)
         persona = config.get("persona", "parent")
         language = config.get("language", "hinglish")
 
         print(f"New session → persona={persona}, language={language}")
-
         await safe_send(ws, {"type": "status", "message": "Connecting to AI agent..."})
 
-        # Step 2: Create ElevenLabs session
+        # Step 2 — create ElevenLabs session
+        # Use asyncio.get_event_loop for thread-safe callbacks
         loop = asyncio.get_event_loop()
 
-        session = ElevenLabsAgentSession(
-            on_agent_audio=lambda audio_b64: loop.call_soon_threadsafe(
-                lambda: asyncio.ensure_future(
-                    safe_send(ws, {"type": "agent_audio", "audio": audio_b64})
-                )
-            ),
-            on_transcript=lambda role, text: loop.call_soon_threadsafe(
-                lambda: asyncio.ensure_future(
-                    safe_send(ws, {"type": "transcript", "role": role, "text": text})
-                )
-            ),
-            on_status=lambda msg: loop.call_soon_threadsafe(
-                lambda: asyncio.ensure_future(
-                    safe_send(ws, {"type": "status", "message": msg})
-                )
+        def on_audio(audio_b64):
+            asyncio.run_coroutine_threadsafe(
+                safe_send(ws, {"type": "agent_audio", "audio": audio_b64}),
+                loop
             )
+
+        def on_transcript(role, text):
+            transcript.append({"role": role, "content": text})
+            asyncio.run_coroutine_threadsafe(
+                safe_send(ws, {"type": "transcript", "role": role, "text": text}),
+                loop
+            )
+
+        def on_status(msg):
+            asyncio.run_coroutine_threadsafe(
+                safe_send(ws, {"type": "status", "message": msg}),
+                loop
+            )
+
+        session = ElevenLabsAgentSession(
+            on_agent_audio=on_audio,
+            on_transcript=on_transcript,
+            on_status=on_status
         )
 
         await session.connect()
-        print("ElevenLabs agent connected")
 
-        # Step 3: Notify frontend session is ready
-        await safe_send(ws, {"type": "session_ready", "message": "Session started"})
+        # Step 3 — notify frontend ready — user speaks first
+        await safe_send(ws, {
+            "type": "session_ready",
+            "message": "Ready — please speak first"
+        })
 
-        # Step 4: Main message loop
+        # Step 4 — main message loop
         while True:
             msg = await ws.receive()
 
@@ -90,13 +108,11 @@ async def websocket_endpoint(ws: WebSocket):
                 print("Client disconnected")
                 break
 
-            # Binary = audio chunk from mic
+            # Binary audio from mic — forward to ElevenLabs as PCM
             if "bytes" in msg and msg["bytes"]:
-                chunk = msg["bytes"]
-                # print(f"Audio chunk: {len(chunk)} bytes")  # debug
-                await session.send_audio(chunk)
+                await session.send_audio(msg["bytes"])
 
-            # Text = control commands
+            # Text control commands
             elif "text" in msg and msg["text"]:
                 try:
                     data = json.loads(msg["text"])
@@ -106,8 +122,15 @@ async def websocket_endpoint(ws: WebSocket):
                         await session.interrupt()
 
                     elif cmd == "end_session":
-                        await safe_send(ws, {"type": "status", "message": "Ending session..."})
-                        await ws.close(code=1000, reason="Session ended by user")
+                        await safe_send(ws, {
+                            "type": "status",
+                            "message": "Generating feedback..."
+                        })
+                        feedback = await generate_feedback(transcript, persona)
+                        await safe_send(ws, {
+                            "type": "session_feedback",
+                            "feedback": feedback
+                        })
                         break
 
                     elif cmd == "ping":
@@ -118,15 +141,76 @@ async def websocket_endpoint(ws: WebSocket):
 
     except WebSocketDisconnect:
         print("WebSocket disconnected")
-
     except asyncio.TimeoutError:
         await safe_send(ws, {"type": "error", "message": "Connection timeout"})
-
     except Exception as e:
+        import traceback
         print(f"Session error: {e}")
+        print(traceback.format_exc())
         await safe_send(ws, {"type": "error", "message": str(e)})
-
     finally:
         if session:
             await session.close()
-            print("Session cleaned up")
+        print("Session cleaned up")
+
+
+async def generate_feedback(transcript: list, persona: str) -> dict:
+    """Generate post-session feedback using Claude"""
+    if not transcript:
+        return {
+            "scores": {},
+            "strengths": [],
+            "improvements": [],
+            "overall_readiness": 0,
+            "summary": "No conversation recorded."
+        }
+    try:
+        client = anthropic.AsyncAnthropic(
+            api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
+        formatted = "\n".join([
+            f"{t['role'].upper()}: {t['content']}"
+            for t in transcript
+        ])
+        message = await client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": f"""You are an expert sales coach. Evaluate this trainee counsellor 
+conversation with an AI persona ({persona}).
+
+Return ONLY valid JSON, no explanation, no markdown, no backticks:
+{{
+  "scores": {{
+    "objection_handling": <0-10>,
+    "product_knowledge": <0-10>,
+    "empathy_rapport": <0-10>,
+    "communication_clarity": <0-10>,
+    "closing_technique": <0-10>
+  }},
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "improvements": ["improvement 1", "improvement 2", "improvement 3"],
+  "key_moments": ["moment 1", "moment 2"],
+  "overall_readiness": <0-10>,
+  "summary": "2-3 sentence summary of performance"
+}}
+
+Transcript:
+{formatted}"""
+            }]
+        )
+        raw = message.content[0].text.strip()
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        return json.loads(raw)
+    except Exception as e:
+        import traceback
+        print(f"Feedback error: {e}")
+        print(traceback.format_exc())
+        return {
+            "scores": {},
+            "strengths": [],
+            "improvements": [],
+            "overall_readiness": 0,
+            "summary": "Could not generate feedback."
+        }
