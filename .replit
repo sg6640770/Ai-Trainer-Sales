@@ -1,0 +1,12 @@
+run = "bash start.sh"
+
+[env]
+PORT = "8000"
+
+[[ports]]
+localPort = 8000
+externalPort = 80
+
+[[ports]]
+localPort = 5173
+externalPort = 3000

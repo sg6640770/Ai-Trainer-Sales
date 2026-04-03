@@ -1,0 +1,50 @@
+# 🔐 Environment variables
+.env
+.env.local
+.env.*.local
+
+# 🧠 Node modules
+node_modules/
+
+# 📦 Build folders
+dist/
+build/
+.next/
+out/
+
+# 📝 Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 🖥️ OS files
+.DS_Store
+Thumbs.db
+
+# 🧪 Testing
+coverage/
+
+# ⚙️ IDE files
+.vscode/
+.idea/
+
+# 🔑 Keys & secrets
+*.pem
+*.key
+
+# 🐳 Docker (optional)
+.dockerignore
+
+# 📁 Misc
+*.tsbuildinfo
+
+# Root env
+.env
+
+# Frontend env
+frontend/.env
+frontend/.env.local
+frontend/.env.*
