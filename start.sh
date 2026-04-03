@@ -8,7 +8,7 @@ BACKEND_PID=$!
 echo "Starting frontend..."
 cd ../frontend
 npm install -q
-npm run dev -- --host 0.0.0.0 --port 5173 &
+npm run dev -- --host 0.0.0.0 --port 5000 &
 FRONTEND_PID=$!
 
 echo "Both servers running"
