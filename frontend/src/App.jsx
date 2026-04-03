@@ -211,6 +211,7 @@ export default function App() {
               onEndSession={endSession}
               cameraOn={cameraOn}
               onToggleCamera={toggleCamera}
+              autoStart={true}
             />
           </div>
           <TranscriptPanel transcript={transcript} />

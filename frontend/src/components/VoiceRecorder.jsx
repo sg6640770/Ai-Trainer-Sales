@@ -7,9 +7,11 @@ export default function VoiceRecorder({
   onEndSession,
   cameraOn,
   onToggleCamera,
+  autoStart,
 }) {
   const [micReady, setMicReady]       = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isMuted, setIsMuted]         = useState(false);
   const [micError, setMicError]       = useState("");
   const [volume, setVolume]           = useState(0);
 
@@ -21,12 +23,21 @@ export default function VoiceRecorder({
   const animFrameRef = useRef(null);
   const pcmBufferRef = useRef([]);
   const intervalRef  = useRef(null);
+  const isMutedRef   = useRef(false);
+  const autoStartedRef = useRef(false);
 
-  const TARGET_SR = 16000;
-
+  // Request mic with echo cancellation + noise suppression
   useEffect(() => {
     let active = true;
-    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 16000,
+      },
+      video: false,
+    })
       .then(stream => {
         if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
@@ -39,10 +50,18 @@ export default function VoiceRecorder({
       });
     return () => {
       active = false;
-      stopRecording();
+      doStop();
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
   }, []);
+
+  // Auto-start when session is ready
+  useEffect(() => {
+    if (autoStart && micReady && !isRecording && !autoStartedRef.current) {
+      autoStartedRef.current = true;
+      doStart();
+    }
+  }, [autoStart, micReady]);
 
   const float32ToPCM16 = (float32Array) => {
     const buffer = new ArrayBuffer(float32Array.length * 2);
@@ -52,17 +71,6 @@ export default function VoiceRecorder({
       view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
     }
     return new Uint8Array(buffer);
-  };
-
-  const downsample = (buffer, fromSR, toSR) => {
-    if (fromSR === toSR) return buffer;
-    const ratio  = fromSR / toSR;
-    const length = Math.round(buffer.length / ratio);
-    const result = new Float32Array(length);
-    for (let i = 0; i < length; i++) {
-      result[i] = buffer[Math.round(i * ratio)];
-    }
-    return result;
   };
 
   const startVolumeLoop = () => {
@@ -78,7 +86,8 @@ export default function VoiceRecorder({
     animFrameRef.current = requestAnimationFrame(tick);
   };
 
-  const flushBuffer = useCallback(() => {
+  const flushBufferRef = useRef(null);
+  flushBufferRef.current = () => {
     if (pcmBufferRef.current.length === 0) return;
     const totalLen = pcmBufferRef.current.reduce((acc, cur) => acc + cur.length, 0);
     const combined = new Float32Array(totalLen);
@@ -88,20 +97,28 @@ export default function VoiceRecorder({
       offset += chunk.length;
     }
     pcmBufferRef.current = [];
-    const pcm = float32ToPCM16(combined);
-    onAudioReady?.(new Blob([pcm], { type: "audio/pcm" }));
-  }, [onAudioReady]);
 
-  const startRecording = useCallback(() => {
-    if (!streamRef.current || isRecording) return;
+    if (isMutedRef.current) {
+      // Send silence so ElevenLabs keeps the connection alive but ignores input
+      const silence = new Uint8Array(combined.length * 2);
+      onAudioReady?.(new Blob([silence], { type: "audio/pcm" }));
+    } else {
+      const pcm = float32ToPCM16(combined);
+      onAudioReady?.(new Blob([pcm], { type: "audio/pcm" }));
+    }
+  };
 
-    const ctx      = new AudioContext();
-    const nativeSR = ctx.sampleRate;
+  const doStart = useCallback(() => {
+    if (!streamRef.current || audioCtxRef.current) return;
+
+    // Use 16000 Hz so browser handles resampling — no manual downsampling needed
+    const ctx = new AudioContext({ sampleRate: 16000 });
     audioCtxRef.current = ctx;
 
     const source = ctx.createMediaStreamSource(streamRef.current);
     sourceRef.current = source;
 
+    // Analyser for the volume meter only
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
     source.connect(analyser);
@@ -109,45 +126,71 @@ export default function VoiceRecorder({
 
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     processor.onaudioprocess = (e) => {
-      const input     = e.inputBuffer.getChannelData(0);
-      const resampled = downsample(input, nativeSR, TARGET_SR);
-      pcmBufferRef.current.push(new Float32Array(resampled));
+      // AudioContext is at 16000 Hz so input is already the right rate
+      const input = e.inputBuffer.getChannelData(0);
+      pcmBufferRef.current.push(new Float32Array(input));
     };
+
     source.connect(processor);
-    processor.connect(ctx.destination);
+    // *** Connect to a silent MediaStreamDestination — NOT ctx.destination ***
+    // Connecting to ctx.destination would play the mic back through speakers
+    // causing a feedback loop that destroys ElevenLabs STT quality.
+    const silentDest = ctx.createMediaStreamDestination();
+    processor.connect(silentDest);
     processorRef.current = processor;
 
-    intervalRef.current = setInterval(flushBuffer, 250);
+    intervalRef.current = setInterval(() => flushBufferRef.current?.(), 250);
     setIsRecording(true);
     startVolumeLoop();
-  }, [isRecording, flushBuffer]);
+  }, []);
 
-  const stopRecording = useCallback(() => {
+  const doStop = useCallback(() => {
     clearInterval(intervalRef.current);
     cancelAnimationFrame(animFrameRef.current);
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     audioCtxRef.current?.close();
-    processorRef.current = null;
-    sourceRef.current    = null;
-    audioCtxRef.current  = null;
-    pcmBufferRef.current = [];
+    processorRef.current  = null;
+    sourceRef.current     = null;
+    audioCtxRef.current   = null;
+    pcmBufferRef.current  = [];
     setIsRecording(false);
+    setIsMuted(false);
+    isMutedRef.current = false;
     setVolume(0);
   }, []);
 
+  const toggleMute = useCallback(() => {
+    const next = !isMutedRef.current;
+    isMutedRef.current = next;
+    setIsMuted(next);
+  }, []);
+
+  const handleStartStop = useCallback(() => {
+    if (isRecording) {
+      doStop();
+      autoStartedRef.current = false;
+    } else {
+      doStart();
+    }
+  }, [isRecording, doStart, doStop]);
+
   const bars        = [0.4, 0.7, 1.0, 0.8, 0.6, 0.9, 0.5, 0.75, 0.45];
-  const volumeScale = Math.min(1, volume / 60);
+  const volumeScale = Math.min(1, volume / 50);
 
   const statusText = micError
     ? micError
     : !micReady
       ? "Requesting microphone…"
       : isRecording
-        ? isAvatarSpeaking
-          ? "AI speaking…"
-          : "Recording — speak now"
-        : status || "Press Start to speak";
+        ? isMuted
+          ? "Muted — click unmute to speak"
+          : isAvatarSpeaking
+            ? "AI speaking…"
+            : "Listening — speak now"
+        : status || "Press Start to begin";
+
+  const micColor = isRecording && !isMuted && !isAvatarSpeaking ? "#6c63ff" : "#f7971e";
 
   return (
     <div style={{
@@ -157,24 +200,36 @@ export default function VoiceRecorder({
       display: "flex", alignItems: "center", gap: "0.85rem",
       flexShrink: 0,
     }}>
+      {/* Volume / mic visualiser */}
       <div style={{ display: "flex", alignItems: "center", gap: 3, height: 32, minWidth: 60 }}>
-        {isRecording
+        {isRecording && !isMuted
           ? bars.map((h, i) => (
               <div key={i} style={{
                 width: 3, borderRadius: 2,
-                background: isAvatarSpeaking ? "#f7971e" : "#6c63ff",
+                background: micColor,
                 height: `${h * volumeScale * 28 + 4}px`,
                 transition: "height 0.1s ease", opacity: 0.85,
               }} />
             ))
-          : <div style={{ fontSize: "1.4rem", opacity: micReady ? 0.5 : 0.25 }}>🎙</div>
+          : <div style={{
+              fontSize: "1.4rem",
+              opacity: isMuted ? 0.3 : micReady ? 0.5 : 0.2,
+              filter: isMuted ? "grayscale(1)" : "none",
+            }}>🎙</div>
         }
       </div>
 
+      {/* Status text */}
       <div style={{ flex: 1 }}>
         <div style={{
           fontSize: "0.8rem", lineHeight: 1.4,
-          color: micError ? "#ff6584" : isRecording && !isAvatarSpeaking ? "#6c63ff" : "var(--text-muted)",
+          color: micError
+            ? "#ff6584"
+            : isMuted
+              ? "#f7971e"
+              : isRecording && !isAvatarSpeaking
+                ? "#6c63ff"
+                : "var(--text-muted)",
           fontWeight: isRecording ? 600 : 400,
         }}>
           {statusText}
@@ -182,6 +237,7 @@ export default function VoiceRecorder({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        {/* Camera toggle */}
         <button
           onClick={onToggleCamera}
           title={cameraOn ? "Turn camera off" : "Turn camera on"}
@@ -192,16 +248,37 @@ export default function VoiceRecorder({
             color: cameraOn ? "#43e97b" : "var(--text-muted)",
             fontSize: "1rem", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "all 0.2s ease",
-            flexShrink: 0,
+            transition: "all 0.2s ease", flexShrink: 0,
           }}
         >
           {cameraOn ? "📷" : "📷"}
         </button>
 
+        {/* Mute/Unmute (only visible when recording) */}
+        {isRecording && (
+          <button
+            onClick={toggleMute}
+            title={isMuted ? "Unmute mic" : "Mute mic"}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.35rem",
+              padding: "0.5rem 0.85rem",
+              background: isMuted ? "rgba(247,151,30,0.15)" : "rgba(108,99,255,0.1)",
+              border: `1.5px solid ${isMuted ? "rgba(247,151,30,0.5)" : "rgba(108,99,255,0.3)"}`,
+              borderRadius: "10px",
+              color: isMuted ? "#f7971e" : "#6c63ff",
+              fontWeight: 700, fontSize: "0.8rem", cursor: "pointer",
+              fontFamily: "var(--font-body)", flexShrink: 0,
+              transition: "all 0.2s ease",
+            }}
+          >
+            {isMuted ? "🔇 Unmute" : "🎤 Mute"}
+          </button>
+        )}
+
+        {/* Start / Stop */}
         {!isRecording ? (
           <button
-            onClick={startRecording}
+            onClick={handleStartStop}
             disabled={!micReady || !!micError}
             style={{
               display: "flex", alignItems: "center", gap: "0.45rem",
@@ -214,16 +291,14 @@ export default function VoiceRecorder({
               fontWeight: 700, fontSize: "0.82rem",
               cursor: micReady && !micError ? "pointer" : "not-allowed",
               boxShadow: micReady && !micError ? "0 4px 16px rgba(108,99,255,0.4)" : "none",
-              transition: "all 0.2s ease",
-              fontFamily: "var(--font-body)",
-              flexShrink: 0,
+              transition: "all 0.2s ease", fontFamily: "var(--font-body)", flexShrink: 0,
             }}
           >
-            <span style={{ fontSize: "0.9rem" }}>🎤</span> Start
+            <span>🎤</span> Start
           </button>
         ) : (
           <button
-            onClick={stopRecording}
+            onClick={handleStartStop}
             style={{
               display: "flex", alignItems: "center", gap: "0.45rem",
               padding: "0.55rem 1.1rem",
@@ -232,8 +307,7 @@ export default function VoiceRecorder({
               borderRadius: "10px", color: "#ff6584",
               fontWeight: 700, fontSize: "0.82rem", cursor: "pointer",
               animation: "recPulse 1.4s ease-in-out infinite",
-              fontFamily: "var(--font-body)",
-              flexShrink: 0,
+              fontFamily: "var(--font-body)", flexShrink: 0,
             }}
           >
             <span style={{
@@ -244,9 +318,9 @@ export default function VoiceRecorder({
           </button>
         )}
 
+        {/* End Session */}
         <button
           onClick={onEndSession}
-          title="End this session"
           style={{
             padding: "0.5rem 0.9rem",
             background: "transparent",
@@ -254,9 +328,8 @@ export default function VoiceRecorder({
             borderRadius: "8px",
             color: "rgba(255,101,132,0.8)", cursor: "pointer",
             fontSize: "0.75rem", fontWeight: 600,
-            fontFamily: "var(--font-body)",
+            fontFamily: "var(--font-body)", flexShrink: 0,
             transition: "all 0.2s ease",
-            flexShrink: 0,
           }}
           onMouseOver={e => {
             e.currentTarget.style.background = "rgba(255,101,132,0.1)";
