@@ -31,6 +31,14 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/api/simli-config")
+async def simli_config():
+    return {
+        "apiKey": os.getenv("SIMLI_API_KEY", ""),
+        "faceId": os.getenv("SIMLI_FACE_ID", "")
+    }
+
+
 @app.websocket("/ws/session")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
