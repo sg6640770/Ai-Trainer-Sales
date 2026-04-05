@@ -10,6 +10,11 @@ const WS_URL = (() => {
   return `${proto}//${location.host}/ws/session`;
 })();
 
+function log(emoji, label, ...args) {
+  console.log(`[${performance.now().toFixed(0)}ms] ${emoji} [App] ${label}`, ...args);
+}
+
+// Play raw PCM16 audio from ElevenLabs (16000Hz mono)
 function playPCM16(b64, audioCtxRef) {
   try {
     const raw     = atob(b64);
@@ -26,7 +31,7 @@ function playPCM16(b64, audioCtxRef) {
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
       audioCtxRef.current = new AudioContext({ sampleRate: 16000 });
     }
-    const ctx    = audioCtxRef.current;
+    const ctx = audioCtxRef.current;
     if (ctx.state === "suspended") ctx.resume();
 
     const buffer = ctx.createBuffer(1, float32.length, 16000);
@@ -35,8 +40,11 @@ function playPCM16(b64, audioCtxRef) {
     src.buffer = buffer;
     src.connect(ctx.destination);
     src.start();
+
+    return float32.length / 16000; // return duration in seconds
   } catch (err) {
     console.error("PCM playback error:", err);
+    return 0;
   }
 }
 
@@ -58,11 +66,43 @@ export default function App() {
   const speakTimerRef = useRef(null);
   const endingRef     = useRef(false);
 
+  // ── CRITICAL FIX: Calculate exact audio duration before setting timer ──
   const handleAgentAudio = useCallback((b64) => {
+    // Always set speaking true immediately
     setIsAvatarSpeaking(true);
     clearTimeout(speakTimerRef.current);
-    speakTimerRef.current = setTimeout(() => setIsAvatarSpeaking(false), 2000);
 
+    try {
+      // Decode base64 to get byte count
+      const raw   = atob(b64);
+      const bytes = raw.length;
+
+      // PCM 16000Hz 16-bit mono = 2 bytes per sample
+      // Duration = bytes / 2 / 16000 * 1000 (ms)
+      const durationMs = (bytes / 2 / 16000) * 1000;
+
+      // Add 800ms buffer AFTER audio finishes before opening mic
+      // This prevents mic from catching the tail end of agent speech
+      const blockMs = durationMs + 800;
+
+      log("🔊", `Agent audio chunk`,
+        `| duration: ${durationMs.toFixed(0)}ms`,
+        `| mic blocked for: ${blockMs.toFixed(0)}ms`
+      );
+
+      speakTimerRef.current = setTimeout(() => {
+        setIsAvatarSpeaking(false);
+        log("🎤", "Mic unblocked — user can speak now");
+      }, blockMs);
+
+    } catch {
+      // Fallback if b64 decode fails
+      speakTimerRef.current = setTimeout(
+        () => setIsAvatarSpeaking(false), 3000
+      );
+    }
+
+    // Play audio — via Simli or direct PCM
     if (simliReadyRef.current && simliAudioRef.current) {
       simliAudioRef.current(b64);
     } else {
@@ -77,7 +117,10 @@ export default function App() {
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
-    ws.onopen = () => ws.send(JSON.stringify({ persona, language }));
+    ws.onopen = () => {
+      log("🔗", "WebSocket connected");
+      ws.send(JSON.stringify({ persona, language }));
+    };
 
     ws.onmessage = (event) => {
       let msg;
@@ -87,28 +130,39 @@ export default function App() {
         case "session_ready":
           setStatus("ready");
           setScreen("session");
+          log("✅", "Session ready");
           break;
+
         case "status":
           setStatus(msg.message || "");
           break;
+
         case "transcript":
-          setTranscript(prev => [...prev, { role: msg.role, text: msg.text }]);
+          setTranscript(prev => [...prev, {
+            role: msg.role,
+            text: msg.text
+          }]);
           break;
+
         case "agent_audio":
           handleAgentAudio(msg.audio);
           break;
+
         case "session_feedback":
           setFeedback(msg.feedback);
           setScreen("feedback");
           break;
+
         case "error":
           setStatus(`Error: ${msg.message}`);
+          console.error("Server error:", msg.message);
           break;
       }
     };
 
     ws.onclose = () => {
       wsRef.current = null;
+      log("🔌", "WebSocket closed");
       if (endingRef.current) {
         setStatus("Session ended");
         setScreen("setup");
@@ -116,26 +170,31 @@ export default function App() {
         setIsAvatarSpeaking(false);
         simliReadyRef.current = false;
         simliAudioRef.current = null;
-        endingRef.current = false;
+        endingRef.current     = false;
       } else {
         setStatus("disconnected");
       }
     };
 
-    ws.onerror = () => setStatus("Connection error — is backend running?");
+    ws.onerror = (e) => {
+      console.error("WS error:", e);
+      setStatus("Connection error — is backend running?");
+    };
   }, [persona, language, handleAgentAudio]);
 
-  // ── KEY FIX: sendAudio now accepts ArrayBuffer directly ─────────────
-  const sendAudio = useCallback((arrayBuffer) => {
+  // Send raw PCM ArrayBuffer to backend → ElevenLabs
+  const sendAudio = useCallback((pcmBytes) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    // Send raw PCM ArrayBuffer directly — no conversion needed
-    wsRef.current.send(arrayBuffer);
+    // pcmBytes is Uint8Array from VoiceRecorder — send its buffer
+    wsRef.current.send(pcmBytes instanceof Uint8Array ? pcmBytes.buffer : pcmBytes);
   }, []);
 
   const endSession = useCallback(() => {
     endingRef.current = true;
+    clearTimeout(speakTimerRef.current);
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "end_session" }));
+      setStatus("Generating feedback...");
     } else {
       setScreen("setup");
       setTranscript([]);
@@ -146,6 +205,7 @@ export default function App() {
   const resetSession = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
+    clearTimeout(speakTimerRef.current);
     audioCtxRef.current?.close();
     audioCtxRef.current  = null;
     simliAudioRef.current = null;
@@ -160,6 +220,7 @@ export default function App() {
   const handleSimliAudioReady = useCallback((fn) => {
     simliAudioRef.current = fn;
     simliReadyRef.current = fn !== null;
+    log("🎭", `Simli audio ready: ${fn !== null}`);
   }, []);
 
   const toggleCamera = useCallback(async () => {
@@ -169,7 +230,9 @@ export default function App() {
       setCameraOn(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true, audio: false
+        });
         setCameraStream(stream);
         setCameraOn(true);
       } catch (err) {
@@ -179,7 +242,9 @@ export default function App() {
   }, [cameraOn, cameraStream]);
 
   useEffect(() => {
-    return () => { cameraStream?.getTracks().forEach(t => t.stop()); };
+    return () => {
+      cameraStream?.getTracks().forEach(t => t.stop());
+    };
   }, [cameraStream]);
 
   return (
@@ -200,7 +265,11 @@ export default function App() {
           height: "100vh",
           overflow: "hidden"
         }}>
-          <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0
+          }}>
             <AvatarPanel
               isAvatarSpeaking={isAvatarSpeaking}
               persona={persona}
