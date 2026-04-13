@@ -35,9 +35,14 @@ class ElevenLabsAgentSession:
             signed_url = data["signed_url"]
 
         print("Connecting to ElevenLabs WebSocket...")
+
+        # ── Detect websockets version and use correct header kwarg ───────────
+        ws_version = tuple(int(x) for x in websockets.__version__.split(".")[:2])
+        header_kwarg = "additional_headers" if ws_version >= (14, 0) else "extra_headers"
+
         self.ws = await websockets.connect(
             signed_url,
-            extra_headers={"xi-api-key": api_key},
+            **{header_kwarg: {"xi-api-key": api_key}},
             ping_interval=20,
             ping_timeout=10
         )
@@ -95,7 +100,6 @@ class ElevenLabsAgentSession:
                     elif msg_type == "conversation_initiation_metadata":
                         meta = data.get("conversation_initiation_metadata_event", {})
                         print(f"Session metadata: {meta}")
-                        # Confirm expected audio format
                         print(f"Agent output format: {meta.get('agent_output_audio_format')}")
                         print(f"User input format: {meta.get('user_input_audio_format')}")
 
@@ -123,14 +127,15 @@ class ElevenLabsAgentSession:
         if not self.ws or self._closed:
             return
         try:
-            if self.ws.closed:
-                return
+            # ── FIX: removed self.ws.closed check which doesn't exist in all
+            #    websockets versions. self._closed flag + exception handling
+            #    is sufficient to guard against a closed connection. ──────────
             encoded = base64.b64encode(audio_bytes).decode("utf-8")
             await self.ws.send(json.dumps({
                 "user_audio_chunk": encoded
             }))
         except websockets.exceptions.ConnectionClosed:
-            print("Cannot send audio — connection closed")
+            self._closed = True  # mark closed so future calls exit early
         except Exception as e:
             print(f"Send audio error: {e}")
 

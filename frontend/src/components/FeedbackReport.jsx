@@ -1,9 +1,26 @@
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from "recharts";
 
-export default function FeedbackReport({ feedback, transcript, onReset }) {
+export default function FeedbackReport({ feedback, transcript, onReset, backLabel }) {
   if (!feedback) return null;
 
-  const scores = feedback.scores || {};
+  const scores = feedback.scores && typeof feedback.scores === "object" ? feedback.scores : {};
+  const normalizeList = (value) => {
+    if (Array.isArray(value)) return value;
+    if (!value) return [];
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+      return [value];
+    }
+    if (typeof value === "object") return Object.values(value).flatMap((item) => Array.isArray(item) ? item : [item]);
+    return [String(value)];
+  };
+
+  const strengths = normalizeList(feedback.strengths);
+  const improvements = normalizeList(feedback.improvements);
+  const summary = feedback.summary || null;
   const radarData = [
     { skill: "Objection", value: scores.objection_handling || 0 },
     { skill: "Knowledge", value: scores.product_knowledge || 0 },
@@ -52,7 +69,7 @@ export default function FeedbackReport({ feedback, transcript, onReset }) {
             fontFamily: "var(--font-body)", fontSize: "0.88rem",
             boxShadow: "0 4px 16px rgba(108,99,255,0.35)"
           }}>
-            + New Session
+            {backLabel || "+ New Session"}
           </button>
         </div>
 
@@ -198,7 +215,7 @@ export default function FeedbackReport({ feedback, transcript, onReset }) {
             }}>
               <span>✓</span> Strengths
             </div>
-            {(feedback.strengths || []).map((s, i) => (
+            {strengths.map((s, i) => (
               <div key={i} style={{
                 fontSize: "0.83rem", color: "var(--text)",
                 marginBottom: "0.5rem", paddingLeft: "0.85rem",
@@ -221,7 +238,7 @@ export default function FeedbackReport({ feedback, transcript, onReset }) {
             }}>
               <span>↑</span> Improvements
             </div>
-            {(feedback.improvements || []).map((s, i) => (
+            {improvements.map((s, i) => (
               <div key={i} style={{
                 fontSize: "0.83rem", color: "var(--text)",
                 marginBottom: "0.5rem", paddingLeft: "0.85rem",
@@ -249,17 +266,21 @@ export default function FeedbackReport({ feedback, transcript, onReset }) {
             display: "flex", flexDirection: "column",
             gap: "0.65rem", maxHeight: 280, overflowY: "auto"
           }}>
-            {transcript.map((msg, i) => (
-              <div key={i} style={{ fontSize: "0.84rem", lineHeight: 1.6 }}>
-                <span style={{
-                  color: msg.role === "user" ? "var(--accent)" : "var(--accent2)",
-                  fontWeight: 700, marginRight: "0.5rem"
-                }}>
-                  {msg.role === "user" ? "Counsellor:" : "AI Persona:"}
-                </span>
-                <span style={{ color: "var(--text-muted)" }}>{msg.text}</span>
-              </div>
-            ))}
+            {transcript.map((msg, i) => {
+              const isUser = msg.role === "user";
+              const speakerLabel = isUser ? "Counsellor:" : "AI Persona:";
+              return (
+                <div key={i} style={{ fontSize: "0.84rem", lineHeight: 1.6 }}>
+                  <span style={{
+                    color: isUser ? "var(--accent)" : "var(--accent2)",
+                    fontWeight: 700, marginRight: "0.5rem"
+                  }}>
+                    {speakerLabel}
+                  </span>
+                  <span style={{ color: "var(--text-muted)" }}>{msg.text}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 

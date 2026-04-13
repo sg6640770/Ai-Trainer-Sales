@@ -1,9 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useAuth } from "./AuthContext.jsx";
+import LoginPage from "./components/LoginPage.jsx";
+import SignupPage from "./components/SignupPage.jsx";
+import TraineeDashboard from "./components/TraineeDashboard.jsx";
+import ManagerDashboard from "./components/ManagerDashboard.jsx";
 import PersonaSelector from "./components/PersonaSelector.jsx";
-import AvatarPanel     from "./components/AvatarPanel.jsx";
-import VoiceRecorder   from "./components/VoiceRecorder.jsx";
+import AvatarPanel from "./components/AvatarPanel.jsx";
+import VoiceRecorder from "./components/VoiceRecorder.jsx";
 import TranscriptPanel from "./components/TranscriptPanel.jsx";
-import FeedbackReport  from "./components/FeedbackReport.jsx";
+import FeedbackReport from "./components/FeedbackReport.jsx";
 
 const WS_URL = (() => {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -14,16 +19,15 @@ function log(emoji, label, ...args) {
   console.log(`[${performance.now().toFixed(0)}ms] ${emoji} [App] ${label}`, ...args);
 }
 
-// Play raw PCM16 audio from ElevenLabs (16000Hz mono)
 function playPCM16(b64, audioCtxRef) {
   try {
-    const raw     = atob(b64);
-    const bytes   = new Uint8Array(raw.length);
+    const raw = atob(b64);
+    const bytes = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
 
     const samples = bytes.length / 2;
     const float32 = new Float32Array(samples);
-    const view    = new DataView(bytes.buffer);
+    const view = new DataView(bytes.buffer);
     for (let i = 0; i < samples; i++) {
       float32[i] = view.getInt16(i * 2, true) / 32768;
     }
@@ -41,51 +45,43 @@ function playPCM16(b64, audioCtxRef) {
     src.connect(ctx.destination);
     src.start();
 
-    return float32.length / 16000; // return duration in seconds
+    return float32.length / 16000;
   } catch (err) {
     console.error("PCM playback error:", err);
     return 0;
   }
 }
 
-export default function App() {
-  const [screen,           setScreen]           = useState("setup");
-  const [persona,          setPersona]          = useState("parent");
-  const [language,         setLanguage]         = useState("hinglish");
-  const [transcript,       setTranscript]       = useState([]);
-  const [status,           setStatus]           = useState("idle");
-  const [feedback,         setFeedback]         = useState(null);
+function SimulatorApp({ onBack }) {
+  const { user } = useAuth();
+  console.log("USER OBJECT:", user);
+  const [screen, setScreen] = useState("setup");
+  const [persona, setPersona] = useState("parent");
+  const [language, setLanguage] = useState("hinglish");
+  const [transcript, setTranscript] = useState([]);
+  const [status, setStatus] = useState("idle");
+  const [feedback, setFeedback] = useState(null);
   const [isAvatarSpeaking, setIsAvatarSpeaking] = useState(false);
-  const [cameraOn,         setCameraOn]         = useState(false);
-  const [cameraStream,     setCameraStream]     = useState(null);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
 
-  const wsRef         = useRef(null);
-  const audioCtxRef   = useRef(null);
+  const wsRef = useRef(null);
+  const audioCtxRef = useRef(null);
   const simliAudioRef = useRef(null);
   const simliReadyRef = useRef(false);
   const speakTimerRef = useRef(null);
-  const endingRef     = useRef(false);
+  const endingRef = useRef(false);
 
-  // ── CRITICAL FIX: Calculate exact audio duration before setting timer ──
   const handleAgentAudio = useCallback((b64) => {
-    // Always set speaking true immediately
     setIsAvatarSpeaking(true);
     clearTimeout(speakTimerRef.current);
 
     try {
-      // Decode base64 to get byte count
-      const raw   = atob(b64);
-      const bytes = raw.length;
-
-      // PCM 16000Hz 16-bit mono = 2 bytes per sample
-      // Duration = bytes / 2 / 16000 * 1000 (ms)
-      const durationMs = (bytes / 2 / 16000) * 1000;
-
-      // Add 800ms buffer AFTER audio finishes before opening mic
-      // This prevents mic from catching the tail end of agent speech
+      const raw = atob(b64);
+      const durationMs = (raw.length / 2 / 16000) * 1000;
       const blockMs = durationMs + 800;
 
-      log("🔊", `Agent audio chunk`,
+      log("🔊", "Agent audio chunk",
         `| duration: ${durationMs.toFixed(0)}ms`,
         `| mic blocked for: ${blockMs.toFixed(0)}ms`
       );
@@ -94,15 +90,10 @@ export default function App() {
         setIsAvatarSpeaking(false);
         log("🎤", "Mic unblocked — user can speak now");
       }, blockMs);
-
     } catch {
-      // Fallback if b64 decode fails
-      speakTimerRef.current = setTimeout(
-        () => setIsAvatarSpeaking(false), 3000
-      );
+      speakTimerRef.current = setTimeout(() => setIsAvatarSpeaking(false), 3000);
     }
 
-    // Play audio — via Simli or direct PCM
     if (simliReadyRef.current && simliAudioRef.current) {
       simliAudioRef.current(b64);
     } else {
@@ -119,7 +110,12 @@ export default function App() {
 
     ws.onopen = () => {
       log("🔗", "WebSocket connected");
-      ws.send(JSON.stringify({ persona, language }));
+      ws.send(JSON.stringify({
+        persona,
+        language,
+        trainee_id: user?.trainee_id ?? null,
+        institute_id: user?.institute_id ?? null,
+      }));
     };
 
     ws.onmessage = (event) => {
@@ -132,27 +128,19 @@ export default function App() {
           setScreen("session");
           log("✅", "Session ready");
           break;
-
         case "status":
           setStatus(msg.message || "");
           break;
-
         case "transcript":
-          setTranscript(prev => [...prev, {
-            role: msg.role,
-            text: msg.text
-          }]);
+          setTranscript(prev => [...prev, { role: msg.role, text: msg.text }]);
           break;
-
         case "agent_audio":
           handleAgentAudio(msg.audio);
           break;
-
         case "session_feedback":
           setFeedback(msg.feedback);
           setScreen("feedback");
           break;
-
         case "error":
           setStatus(`Error: ${msg.message}`);
           console.error("Server error:", msg.message);
@@ -170,7 +158,7 @@ export default function App() {
         setIsAvatarSpeaking(false);
         simliReadyRef.current = false;
         simliAudioRef.current = null;
-        endingRef.current     = false;
+        endingRef.current = false;
       } else {
         setStatus("disconnected");
       }
@@ -180,12 +168,10 @@ export default function App() {
       console.error("WS error:", e);
       setStatus("Connection error — is backend running?");
     };
-  }, [persona, language, handleAgentAudio]);
+  }, [persona, language, handleAgentAudio, user]);
 
-  // Send raw PCM ArrayBuffer to backend → ElevenLabs
   const sendAudio = useCallback((pcmBytes) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    // pcmBytes is Uint8Array from VoiceRecorder — send its buffer
     wsRef.current.send(pcmBytes instanceof Uint8Array ? pcmBytes.buffer : pcmBytes);
   }, []);
 
@@ -207,7 +193,7 @@ export default function App() {
     wsRef.current = null;
     clearTimeout(speakTimerRef.current);
     audioCtxRef.current?.close();
-    audioCtxRef.current  = null;
+    audioCtxRef.current = null;
     simliAudioRef.current = null;
     simliReadyRef.current = false;
     setTranscript([]);
@@ -230,9 +216,7 @@ export default function App() {
       setCameraOn(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true, audio: false
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         setCameraStream(stream);
         setCameraOn(true);
       } catch (err) {
@@ -242,34 +226,38 @@ export default function App() {
   }, [cameraOn, cameraStream]);
 
   useEffect(() => {
-    return () => {
-      cameraStream?.getTracks().forEach(t => t.stop());
-    };
+    return () => { cameraStream?.getTracks().forEach(t => t.stop()); };
   }, [cameraStream]);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-
       {screen === "setup" && (
-        <PersonaSelector
-          persona={persona}   setPersona={setPersona}
-          language={language} setLanguage={setLanguage}
-          onStart={connectWS}
-        />
+        <div>
+          {onBack && (
+            <div style={{ position: "absolute", top: "1.25rem", left: "1.25rem", zIndex: 10 }}>
+              <button onClick={onBack} style={{
+                background: "var(--surface)", border: "1px solid var(--border)",
+                borderRadius: "10px", padding: "0.5rem 1rem",
+                color: "var(--text-muted)", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer"
+              }}>
+                ← Dashboard
+              </button>
+            </div>
+          )}
+          <PersonaSelector
+            persona={persona} setPersona={setPersona}
+            language={language} setLanguage={setLanguage}
+            onStart={connectWS}
+          />
+        </div>
       )}
 
       {screen === "session" && (
         <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 360px",
-          height: "100vh",
-          overflow: "hidden"
+          display: "grid", gridTemplateColumns: "1fr 360px",
+          height: "100vh", overflow: "hidden"
         }}>
-          <div style={{
-            display: "flex",
-            flexDirection: "column",
-            minHeight: 0
-          }}>
+          <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
             <AvatarPanel
               isAvatarSpeaking={isAvatarSpeaking}
               persona={persona}
@@ -299,4 +287,64 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function parseCallbackToken() {
+  const hash = window.location.hash.substring(1);
+  const params = new URLSearchParams(hash);
+  const type = params.get("type");
+  const token = params.get("access_token");
+  if (token && (type === "signup" || type === "magiclink" || type === "recovery")) {
+    return token;
+  }
+  return null;
+}
+
+export default function App() {
+  const { user, loading } = useAuth();
+  const [authScreen, setAuthScreen] = useState("login");
+  const [simulating, setSimulating] = useState(false);
+  const [callbackToken, setCallbackToken] = useState(() => parseCallbackToken());
+
+  useEffect(() => {
+    if (callbackToken) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, [callbackToken]);
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", background: "var(--bg)"
+      }}>
+        <div style={{ color: "var(--text-muted)" }}>Loading…</div>
+      </div>
+    );
+  }
+
+  if (callbackToken) {
+    return (
+      <ConfirmationPage
+        token={callbackToken}
+        onGoToLogin={() => setCallbackToken(null)}
+      />
+    );
+  }
+
+  if (!user) {
+    return authScreen === "login"
+      ? <LoginPage onSwitchToSignup={() => setAuthScreen("signup")} />
+      : <SignupPage onSwitchToLogin={() => setAuthScreen("login")} />;
+  }
+
+  if (simulating) {
+    return <SimulatorApp onBack={() => setSimulating(false)} />;
+  }
+
+  if (user.role === "manager") {
+    return <ManagerDashboard />;
+  }
+
+  return <TraineeDashboard onStartSimulation={() => setSimulating(true)} />;
 }

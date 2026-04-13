@@ -7,7 +7,7 @@ export default function PersonaSelector({ persona, setPersona, language, setLang
 
   const languages = [
     { id: "hinglish", label: "Hinglish", flag: "🇮🇳" },
-    { id: "hindi",    label: "Hindi",    flag: "🕉️"  },
+    { id: "hindi",    label: "Hindi",    flag: "🇮🇳"  },
     { id: "english",  label: "English",  flag: "🇬🇧" }
   ];
 

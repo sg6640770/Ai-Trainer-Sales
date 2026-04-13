@@ -75,39 +75,47 @@ export default function TranscriptPanel({ transcript }) {
           </div>
         )}
 
-        {transcript.map((msg, i) => (
-          <div key={i} style={{
-            display: "flex", flexDirection: "column",
-            alignItems: msg.role === "user" ? "flex-end" : "flex-start",
-            animation: "fadeSlideIn 0.25s ease"
-          }}>
-            <div style={{
-              fontSize: "0.62rem",
-              color: msg.role === "user" ? "var(--accent)" : "var(--accent2)",
-              marginBottom: "0.3rem", fontWeight: 700,
-              letterSpacing: "0.08em", textTransform: "uppercase",
-              paddingLeft: msg.role === "user" ? 0 : "0.25rem",
-              paddingRight: msg.role === "user" ? "0.25rem" : 0,
+        {transcript.map((msg, i) => {
+          const isUser = msg.role === "user";
+          const speakerLabel = isUser ? "You" : "AI Persona";
+          return (
+            <div key={i} style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: isUser ? "flex-end" : "flex-start",
+              animation: "fadeSlideIn 0.25s ease"
             }}>
-              {msg.role === "user" ? "You" : "AI Persona"}
+              <div style={{
+                fontSize: "0.62rem",
+                color: isUser ? "var(--accent)" : "var(--accent2)",
+                marginBottom: "0.3rem",
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                paddingLeft: isUser ? 0 : "0.25rem",
+                paddingRight: isUser ? "0.25rem" : 0
+              }}>
+                {speakerLabel}
+              </div>
+              <div style={{
+                background: isUser
+                  ? "linear-gradient(135deg, rgba(108,99,255,0.25), rgba(108,99,255,0.12))"
+                  : "var(--surface2)",
+                border: `1px solid ${isUser ? "rgba(108,99,255,0.35)" : "var(--border)"}`,
+                borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                padding: "0.65rem 0.95rem",
+                maxWidth: "90%", fontSize: "0.86rem", lineHeight: 1.6,
+                color: "var(--text)",
+                boxShadow: isUser
+                  ? "0 2px 12px rgba(108,99,255,0.12)"
+                  : "0 2px 8px rgba(0,0,0,0.2)"
+              }}>
+                {msg.text}
+              </div>
             </div>
-            <div style={{
-              background: msg.role === "user"
-                ? "linear-gradient(135deg, rgba(108,99,255,0.25), rgba(108,99,255,0.12))"
-                : "var(--surface2)",
-              border: `1px solid ${msg.role === "user" ? "rgba(108,99,255,0.35)" : "var(--border)"}`,
-              borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-              padding: "0.65rem 0.95rem",
-              maxWidth: "90%", fontSize: "0.86rem", lineHeight: 1.6,
-              color: "var(--text)",
-              boxShadow: msg.role === "user"
-                ? "0 2px 12px rgba(108,99,255,0.12)"
-                : "0 2px 8px rgba(0,0,0,0.2)"
-            }}>
-              {msg.text}
-            </div>
-          </div>
-        ))}
+          );
+        })}
+
         <div ref={bottomRef} />
       </div>
 
